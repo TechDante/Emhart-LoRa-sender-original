@@ -1,0 +1,103 @@
+#include <heltec.h>
+#include <SPI.h>
+#include <Arduino.h>
+#include "DHT.h"
+#include "DHT.cpp"
+#include "esp_system.h"
+
+#define DHT_SENSOR_PIN 21
+#define DHT_SENSOR_TYPE DHT11
+
+#define BAND 433920000
+#define PABOOST false
+#define TXPOWER 14
+#define SPREADING_FACTOR 7
+#define BANDWIDTH 500000
+#define CODING_RATE 5
+#define PREAMBLE_LENGTH 6
+#define SYNC_WORD 0x34
+
+#define SS      18
+#define RST     14
+#define DI0     26
+
+DHT dht_sensor(DHT_SENSOR_PIN, DHT_SENSOR_TYPE);
+String id = "";
+int counter;
+
+String getMacAddress() {
+  uint8_t baseMac[6];
+  // Get MAC address for WiFi station
+  esp_read_mac(baseMac, ESP_MAC_WIFI_STA);
+  char baseMacChr[18] = {0};
+  sprintf(baseMacChr, "%02X:%02X:%02X:%02X:%02X:%02X", baseMac[0], baseMac[1], baseMac[2], baseMac[3], baseMac[4], baseMac[5]);
+  return String(baseMacChr);
+}
+
+void setup() {
+
+    id = getMacAddress();
+
+    Serial.begin(115200);
+    while(!Serial);
+    Serial.println("LoRa Sender: \"" + id + "\"");
+
+    Heltec.begin(true, true, true, true, BAND);
+    Heltec.display->init();
+    Heltec.display->flipScreenVertically();
+    Heltec.display->setFont(ArialMT_Plain_10);
+    Heltec.display->clear();
+    Heltec.display->drawString(0, 0, "Initializing...");
+    Heltec.display->display();
+
+    dht_sensor.begin();
+    
+    SPI.begin(5,19,27,18);
+    LoRa.setPins(SS,RST,DI0);
+    LoRa.setFrequency(433920000);
+    LoRa.setSyncWord(0x34);
+    LoRa.setSpreadingFactor(7);
+    LoRa.setCodingRate4(5);
+    LoRa.setSignalBandwidth(500000);
+    LoRa.setPreambleLength(6);
+    LoRa.enableCrc(); 
+    delay(2000);
+}
+
+void loop() {
+  float h = dht_sensor.readHumidity();                                            
+  float t = dht_sensor.readTemperature();
+  
+  if (isnan(h) || isnan(t)) {                                                
+    Serial.println(F("Failed to read from DHT sensor!"));
+    return;
+  }
+  else {
+    String msg = "Sending packet: " + String(counter);
+
+    Heltec.display->clear();
+    Heltec.display->drawString(0, 0, "ID: " + id);
+    Heltec.display->drawString(0, 10, msg);
+    Serial.println(msg);
+
+    Serial.print("temperature: ");
+    Serial.println(t);
+    Serial.print("humidity: ");
+    Serial.println(h);
+
+    LoRa.beginPacket();
+    String json = "{\"Device_ID\":\"" + id + "\",\"humidity\": " + String(h) + ", \"temperature\": " + String(t)+ "}";
+    Serial.println("Json packet: " + json);
+    LoRa.print(json);
+    LoRa.endPacket();
+
+
+    counter++; 
+    msg = " T: "+ String(t) + " -- " + " H: " + String(h) ;
+
+    Heltec.display->drawString(0, 30, msg);
+    Heltec.display->display();   
+  }   
+  
+  delay(1000);
+}
