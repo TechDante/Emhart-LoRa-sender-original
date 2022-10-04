@@ -83,8 +83,8 @@ void loop() {
   Heltec.display->drawString(0, 0, "ID: " + id);
   #endif
 
-  float temp = dht.readTemperature();
-  float humi = dht.readHumidity();
+  byte temp = dht.readTemperature();
+  byte humi = dht.readHumidity();
   Serial.println(temp);
   Serial.println(humi);
 
